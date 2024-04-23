@@ -20,6 +20,7 @@
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
 import sys
+import rebade
 from rebade.MultiCommand import MultiCommand
 from rebade.actions.ActionBackup import ActionBackup
 from rebade.actions.ActionDaemon import ActionDaemon
@@ -29,7 +30,7 @@ from rebade.actions.ActionUnlock import ActionUnlock
 from rebade.actions.ActionCheck import ActionCheck
 
 def main():
-	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", run_method = True)
+	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", run_method = True, trailing_text = f"rebade v{rebade.VERSION}")
 
 	def genparser(parser):
 		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
