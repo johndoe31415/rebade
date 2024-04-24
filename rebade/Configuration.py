@@ -23,8 +23,7 @@ import os
 import stat
 import enum
 import json
-import functools
-from rebade.Exceptions import ConfigurationException, PlanNotFoundException, InsecurePermissionsException
+from rebade.Exceptions import ConfigurationException, PlanNotFoundException, InsecurePermissionsException, NoDefaultPlanException
 
 class HookMethod(enum.Enum):
 	HttpGet = "http_get"

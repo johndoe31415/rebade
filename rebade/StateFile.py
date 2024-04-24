@@ -48,7 +48,7 @@ class StateFile():
 
 	def get_activity(self, name: str):
 		if name not in self._state["activity"]:
-			self.reset_activity()
+			self.reset_activity(name)
 		return self._state["activity"][name]
 
 	def get_holdoff(self, name: str):

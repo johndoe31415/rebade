@@ -24,7 +24,7 @@ import math
 import contextlib
 import subprocess
 import requests
-from rebade.Configuration import BackupMethod, HookMethod
+from rebade.Configuration import BackupMethod, HookMethod, Condition
 
 class BackupEngine():
 	def __init__(self, restic_binary: str, nice: int = 19, ionice_class: str = "idle"):
@@ -98,7 +98,7 @@ class BackupEngine():
 			cmd = [ "nice", "-n", str(self._nice) ]
 			cmd += [ "ionice", "-c", self._ionice_class ]
 			cmd += [ self._restic_binary ] + self._restic_backup_args(plan)
-			success = subprocess.run(cmd).returncode == 0
+			success = subprocess.run(cmd, check = False).returncode == 0
 			run_args["backup_success"] = success
 			return success
 
@@ -107,7 +107,7 @@ class BackupEngine():
 			os.makedirs(mountpoint)
 		cmd = [ self._restic_binary, "mount" ] + self._restic_remote_args(plan)
 		cmd += [ mountpoint ]
-		success = subprocess.run(cmd).returncode == 0
+		success = subprocess.run(cmd, check = False).returncode == 0
 		return success
 
 	def execute_forget(self, plan: "BackupPlan", scale = 1.0):
@@ -124,15 +124,15 @@ class BackupEngine():
 		for (key, value) in time_params.items():
 			cmd += [ key, value ]
 		cmd += [ "--prune" ]
-		success = subprocess.run(cmd).returncode == 0
+		success = subprocess.run(cmd, check = False).returncode == 0
 		return success
 
 	def execute_unlock(self, plan: "BackupPlan"):
 		cmd = [ self._restic_binary, "unlock" ] + self._restic_remote_args(plan)
-		success = subprocess.run(cmd).returncode == 0
+		success = subprocess.run(cmd, check = False).returncode == 0
 		return success
 
 	def execute_check(self, plan: "BackupPlan"):
 		cmd = [ self._restic_binary, "check" ] + self._restic_remote_args(plan)
-		success = subprocess.run(cmd).returncode == 0
+		success = subprocess.run(cmd, check = False).returncode == 0
 		return success

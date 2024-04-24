@@ -23,3 +23,4 @@ class RebadeException(Exception): pass
 class ConfigurationException(RebadeException): pass
 class PlanNotFoundException(RebadeException): pass
 class InsecurePermissionsException(RebadeException): pass
+class NoDefaultPlanException(RebadeException): pass
