@@ -127,12 +127,7 @@ class BackupEngine():
 		success = subprocess.run(cmd, check = False).returncode == 0
 		return success
 
-	def execute_unlock(self, plan: "BackupPlan"):
-		cmd = [ self._restic_binary, "unlock" ] + self._restic_remote_args(plan)
-		success = subprocess.run(cmd, check = False).returncode == 0
-		return success
-
-	def execute_check(self, plan: "BackupPlan"):
-		cmd = [ self._restic_binary, "check" ] + self._restic_remote_args(plan)
+	def execute_generic_action(self, plan: "BackupPlan", action: str):
+		cmd = [ self._restic_binary, action ] + self._restic_remote_args(plan)
 		success = subprocess.run(cmd, check = False).returncode == 0
 		return success

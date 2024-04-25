@@ -23,10 +23,10 @@ from rebade.MultiCommand import LoggingAction
 from rebade.Configuration import Configuration
 from rebade.BackupEngine import BackupEngine
 
-class ActionCheck(LoggingAction):
+class ActionGeneric(LoggingAction):
 	def run(self):
 		self._config = Configuration.parse_json_file(self._args.config_file)
 		plans = self._config.get_plans_by_name(self._args.plan_name)
 		backup_engine = BackupEngine(self._args.restic_binary)
 		for plan in plans:
-			backup_engine.execute_check(plan)
+			backup_engine.execute_generic_action(plan, action = self._cmd)
