@@ -65,9 +65,10 @@ class Hook():
 
 
 class BackupSource():
-	def __init__(self, paths: list[str], exclude: list[str]):
+	def __init__(self, paths: list[str], exclude: list[str], only_filesystems: list[str]):
 		self._paths = paths
 		self._exclude = exclude
+		self._only_filesystems = set(only_filesystems)
 
 	@property
 	def paths(self):
@@ -77,11 +78,16 @@ class BackupSource():
 	def exclude(self):
 		return self._exclude
 
+	@property
+	def only_filesystems(self):
+		return self._only_filesystems
+
 	@classmethod
 	def parse(cls, data: dict):
 		paths = data["paths"]
 		exclude = data.get("exclude", [ ])
-		return cls(paths = paths, exclude = exclude)
+		only_filesystems = data.get("only_filesystems", [ ])
+		return cls(paths = paths, exclude = exclude, only_filesystems = only_filesystems)
 
 class BackupMethod(enum.Enum):
 	SFTP = "sftp"

@@ -24,7 +24,12 @@ import math
 import contextlib
 import subprocess
 import requests
+import logging
 from rebade.Configuration import BackupMethod, HookMethod, Condition
+from rebade.Tools import FileSystemTools
+from rebade.CmdlineEscape import CmdlineEscape
+
+_log = logging.getLogger(__spec__.name)
 
 class BackupEngine():
 	def __init__(self, restic_binary: str, nice: int = 19, ionice_class: str = "idle"):
@@ -57,6 +62,11 @@ class BackupEngine():
 		args += self._restic_remote_args(plan)
 		for exclude in plan.source.exclude:
 			args += [ "--exclude", exclude ]
+		if len(plan.source.only_filesystems) > 0:
+			# List filesystems and exclude all those that are not in the list
+			for mounted_filesystem in FileSystemTools.get_mounted_filesystems():
+				if mounted_filesystem.fstype not in plan.source.only_filesystems:
+					args += [ "--exclude", mounted_filesystem.mountpoint ]
 		for path in plan.source.paths:
 			args += [ path ]
 		return args
@@ -93,12 +103,17 @@ class BackupEngine():
 		for hook in hooks:
 			self.execute_hook(hook, run_args)
 
+	def _run_cmd(self, cmd: list[str]):
+		_log.debug("Execution of command: %s", CmdlineEscape().cmdline(cmd))
+		success = subprocess.run(cmd, check = False).returncode == 0
+		return success
+
 	def execute_backup(self, plan: "BackupPlan"):
 		with self.execute_pre_post_hooks(plan) as run_args:
 			cmd = [ "nice", "-n", str(self._nice) ]
 			cmd += [ "ionice", "-c", self._ionice_class ]
 			cmd += [ self._restic_binary ] + self._restic_backup_args(plan)
-			success = subprocess.run(cmd, check = False).returncode == 0
+			success = self._run_cmd(cmd)
 			run_args["backup_success"] = success
 			return success
 
@@ -107,7 +122,7 @@ class BackupEngine():
 			os.makedirs(mountpoint)
 		cmd = [ self._restic_binary, "mount" ] + self._restic_remote_args(plan)
 		cmd += [ mountpoint ]
-		success = subprocess.run(cmd, check = False).returncode == 0
+		success = self._run_cmd(cmd)
 		return success
 
 	def execute_forget(self, plan: "BackupPlan", scale = 1.0):
@@ -124,10 +139,10 @@ class BackupEngine():
 		for (key, value) in time_params.items():
 			cmd += [ key, value ]
 		cmd += [ "--prune" ]
-		success = subprocess.run(cmd, check = False).returncode == 0
+		success = self._run_cmd(cmd)
 		return success
 
 	def execute_generic_action(self, plan: "BackupPlan", action: str):
 		cmd = [ self._restic_binary, action ] + self._restic_remote_args(plan)
-		success = subprocess.run(cmd, check = False).returncode == 0
+		success = self._run_cmd(cmd)
 		return success
