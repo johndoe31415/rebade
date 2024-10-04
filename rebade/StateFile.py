@@ -29,7 +29,7 @@ class StateFile():
 		try:
 			with open(filename) as f:
 				self._state = json.load(f)
-		except FileNotFoundError:
+		except (FileNotFoundError, json.decoder.JSONDecodeError):
 			self._state = {
 				"activity": { },
 				"holdoff": { },
