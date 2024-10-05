@@ -52,6 +52,8 @@ class ActionDaemon(LoggingAction):
 	def _clear_fd(self, fd):
 		f = self._descriptors[fd]
 		while True:
+			# This call to read will OSError ("no such device") if the input
+			# device is removed
 			if f.read() is None:
 				return
 
@@ -126,17 +128,26 @@ class ActionDaemon(LoggingAction):
 							self._state_file.set_holdoff(plan.name, holdoff)
 							_log.warning(f"Failed to backed up: {plan.name} -- incurring holdoff")
 
+	def _open_run_close(self):
+		try:
+			self._open_event_devices()
+			self._run_loop()
+		finally:
+			self._close_event_devices()
+
 	def _run_watch(self):
 		self._config = Configuration.parse_json_file(self._args.config_file)
 		self._plans = self._config.get_plans_by_name(self._args.plan_name)
 		self._state_file = StateFile(self._args.state_file)
 		self._backup_engine = BackupEngine(self._args.restic_binary)
 		self._descriptors = { }
-		try:
-			self._open_event_devices()
-			self._run_loop()
-		finally:
-			self._close_event_devices()
+		while True:
+			try:
+				self._open_run_close()
+			except OSError as e:
+				delay_secs = 3
+				print(f"Caught {e.__class__.__name__}: {str(e)} -- restarting in {delay_secs} seconds", file = sys.stderr)
+				time.sleep(delay_secs)
 
 	def _escape(self, cmd):
 		# TODO IMPLEMENT ME
