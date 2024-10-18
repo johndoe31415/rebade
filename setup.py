@@ -6,7 +6,7 @@ with open("README.md") as f:
 setuptools.setup(
 	name = "rebade",
 	packages = setuptools.find_packages(),
-	version = "0.0.3",
+	version = "0.0.4rc0",
 	license = "gpl-3.0",
 	description = "Restic backup daemon: a friendly frontend for restic",
 	long_description = long_description,
@@ -14,7 +14,7 @@ setuptools.setup(
 	author = "Johannes Bauer",
 	author_email = "joe@johannes-bauer.com",
 	url = "https://github.com/johndoe31415/rebade",
-	download_url = "https://github.com/johndoe31415/rebade/archive/v0.0.3.tar.gz",
+	download_url = "https://github.com/johndoe31415/rebade/archive/v0.0.4rc0.tar.gz",
 	keywords = [ "restic", "backup", "daemon" ],
 	install_requires = [
 		"requests"
