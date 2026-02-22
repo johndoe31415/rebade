@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -37,39 +37,65 @@ class BackupEngine():
 		self._nice = nice
 		self._ionice_class = ionice_class
 
-	def _restic_target_args(self, target):
-		match target.method:
+	def _restic_target_command(self, target: dict) -> dict:
+		method = BackupMethod(target["method"])
+		match method:
 			case BackupMethod.SFTP:
-				cmd_string = [ "sftp://" ]
-				if "username" in target.args:
-					cmd_string.append(f"{target.args['username']}@")
-				cmd_string.append(target.args['hostname'])
-				if "port" in target.args:
-					cmd_string.append(f":{target.args['port']}")
-				cmd_string.append("/")
-				cmd_string.append(target.args["remote_path"])
-				return [ "-r", "".join(cmd_string) ]
-		raise NotImplementedError(target.method)
+				repo_string = [ "sftp://" ]
+				if "username" in target:
+					repo_string.append(f"{target['username']}@")
+				repo_string.append(target["hostname"])
+				if "port" in target:
+					repo_string.append(f":{target['port']}")
+				repo_string.append("/")
+				repo_string.append(target["remote_path"])
+				return {
+					"cmdline": [ "-r", "".join(repo_string) ],
+					"env": { },
+				}
 
-	def _restic_remote_args(self, plan: "Plan"):
-		args = [ ]
-		args += [ "-p", plan.keyfile ]
-		args += self._restic_target_args(plan.target)
-		return args
+			case BackupMethod.REST:
+				repo_string = [ "rest:" ]
+				repo_string.append(target.get("protocol", "https"))
+				repo_string += [ "://" ]
+				repo_string.append(target["hostname"])
+				if "port" in target:
+					repo_string.append(f":{target['port']}")
+				repo_string.append(target["remote_path"])
 
-	def _restic_backup_args(self, plan: "Plan"):
-		args = [ "backup" ]
-		args += self._restic_remote_args(plan)
+				env = { }
+				if "username" in target:
+					env["RESTIC_REST_USERNAME"] = target["username"]
+				if "password" in target:
+					env["RESTIC_REST_PASSWORD"] = target["password"]
+
+				cmdline = [ "-r", "".join(repo_string) ]
+				if "ca_filename" in target:
+					cmdline += [ "--cacert", target["ca_filename"] ]
+				return {
+					"cmdline": cmdline,
+					"env": env,
+				}
+		raise NotImplementedError(method)
+
+	def _restic_remote_command(self, plan: "Plan") -> dict:
+		command = self._restic_target_command(plan.target)
+		command["cmdline"] = [ "-p", plan.keyfile ] + command["cmdline"]
+		return command
+
+	def _restic_backup_command(self, plan: "Plan") -> dict:
+		command = self._restic_remote_command(plan)
+		command["cmdline"] = [ "backup" ] + command["cmdline"]
 		for exclude in plan.source.exclude:
-			args += [ "--exclude", exclude ]
+			command["cmdline"] += [ "--exclude", exclude ]
 		if len(plan.source.only_filesystems) > 0:
 			# List filesystems and exclude all those that are not in the list
 			for mounted_filesystem in FileSystemTools.get_mounted_filesystems():
 				if mounted_filesystem.fstype not in plan.source.only_filesystems:
-					args += [ "--exclude", mounted_filesystem.mountpoint ]
+					command["cmdline"] += [ "--exclude", mounted_filesystem.mountpoint ]
 		for path in plan.source.paths:
-			args += [ path ]
-		return args
+			command["cmdline"] += [ path ]
+		return command
 
 	@contextlib.contextmanager
 	def execute_pre_post_hooks(self, plan: "BackupPlan"):
@@ -103,26 +129,30 @@ class BackupEngine():
 		for hook in hooks:
 			self.execute_hook(hook, run_args)
 
-	def _run_cmd(self, cmd: list[str]):
-		_log.debug("Execution of command: %s", CmdlineEscape().cmdline(cmd))
-		success = subprocess.run(cmd, check = False).returncode == 0
+	def _run_cmd(self, command: dict):
+		_log.debug("Execution of command: %s with %d environment vars", CmdlineEscape().cmdline(command["cmdline"]), len(command["env"]))
+		env = dict(os.environ)
+		env.update(command["env"])
+		success = subprocess.run(command["cmdline"], env = env, check = False).returncode == 0
 		return success
 
 	def execute_backup(self, plan: "BackupPlan"):
 		with self.execute_pre_post_hooks(plan) as run_args:
-			cmd = [ "nice", "-n", str(self._nice) ]
-			cmd += [ "ionice", "-c", self._ionice_class ]
-			cmd += [ self._restic_binary ] + self._restic_backup_args(plan)
-			success = self._run_cmd(cmd)
+			command = self._restic_backup_command(plan)
+			cmdline_prefix = [ "nice", "-n", str(self._nice) ]
+			cmdline_prefix += [ "ionice", "-c", self._ionice_class ]
+			cmdline_prefix += [ self._restic_binary ]
+			command["cmdline"] = cmdline_prefix + command["cmdline"]
+			success = self._run_cmd(command)
 			run_args["backup_success"] = success
 			return success
 
 	def execute_mount(self, plan: "BackupPlan", mountpoint: str):
 		with contextlib.suppress(FileExistsError):
 			os.makedirs(mountpoint)
-		cmd = [ self._restic_binary, "mount" ] + self._restic_remote_args(plan)
-		cmd += [ mountpoint ]
-		success = self._run_cmd(cmd)
+		command = self._restic_remote_command(plan)
+		command["cmdline"] = [ self._restic_binary, "mount" ] + command["cmdline"] + [ mountpoint ]
+		success = self._run_cmd(command)
 		return success
 
 	def execute_forget(self, plan: "BackupPlan", scale = 1.0):
@@ -134,15 +164,17 @@ class BackupEngine():
 		}
 		time_params = { key: str(math.ceil(value * scale)) for (key, value) in time_params.items() }
 
-		cmd = [ self._restic_binary, "forget" ] + self._restic_remote_args(plan)
-		cmd += [ "--keep-yearly", "unlimited" ]
+		command = self._restic_remote_command(plan)
+		command["cmdline"] = [ self._restic_binary, "forget" ] + command["cmdline"]
+		command["cmdline"] += [ "--keep-yearly", "unlimited" ]
 		for (key, value) in time_params.items():
-			cmd += [ key, value ]
-		cmd += [ "--prune" ]
-		success = self._run_cmd(cmd)
+			command["cmdline"] += [ key, value ]
+		command["cmdline"] += [ "--prune" ]
+		success = self._run_cmd(command)
 		return success
 
 	def execute_generic_action(self, plan: "BackupPlan", action: str):
-		cmd = [ self._restic_binary, action ] + self._restic_remote_args(plan)
-		success = self._run_cmd(cmd)
+		command = self._restic_remote_command(plan)
+		command["cmdline"] = [ self._restic_binary, action ] + command["cmdline"]
+		success = self._run_cmd(command)
 		return success

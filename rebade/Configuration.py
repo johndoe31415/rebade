@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -91,36 +91,10 @@ class BackupSource():
 
 class BackupMethod(enum.Enum):
 	SFTP = "sftp"
-
-class BackupTarget():
-	def __init__(self, method: BackupMethod, args: dict):
-		self._method = method
-		self._args = args
-
-	@property
-	def method(self):
-		return self._method
-
-	@property
-	def args(self):
-		return self._args
-
-	@classmethod
-	def parse(cls, data: dict):
-		method = BackupMethod(data["method"])
-		args = { }
-		match method:
-			case BackupMethod.SFTP:
-				if "username" in data:
-					args["username"] = data["username"]
-				args["hostname"] = data["hostname"]
-				if "port" in data:
-					args["port"] = data["port"]
-				args["remote_path"] = data["remote_path"]
-		return cls(method = method, args = args)
+	REST = "rest"
 
 class BackupPlan():
-	def __init__(self, name: str, is_default: bool, keyfile: str, soft_period_secs: int, hard_period_secs: int, source: BackupSource, target: BackupTarget, pre_hooks: list[Hook], post_hooks: list[Hook]):
+	def __init__(self, name: str, is_default: bool, keyfile: str, soft_period_secs: int, hard_period_secs: int, source: BackupSource, target: dict, pre_hooks: list[Hook], post_hooks: list[Hook]):
 		self._validate_keyfile(keyfile)
 		self._name = name
 		self._is_default = is_default
@@ -176,7 +150,7 @@ class BackupPlan():
 	@classmethod
 	def parse(cls, plan_name: str, plan_data: dict):
 		source = BackupSource.parse(plan_data["source"])
-		target = BackupTarget.parse(plan_data["target"])
+		target = plan_data["target"]
 		pre_hooks = [ ] if ("pre_hooks" not in plan_data) else [ Hook.parse(hook_data) for hook_data in plan_data["pre_hooks"] ]
 		post_hooks = [ ] if ("post_hooks" not in plan_data) else [ Hook.parse(hook_data) for hook_data in plan_data["post_hooks"] ]
 		return cls(name = plan_name, is_default = plan_data.get("default", False), keyfile = plan_data["keyfile"], soft_period_secs = plan_data.get("soft_period_secs", 12 * 3600), hard_period_secs = plan_data.get("hard_period_secs", 16 * 3600), source = source, target = target, pre_hooks = pre_hooks, post_hooks = post_hooks)
