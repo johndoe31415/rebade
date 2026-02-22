@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -19,4 +19,4 @@
 #
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
-VERSION = "0.0.4rc0"
+VERSION = "0.0.4"
