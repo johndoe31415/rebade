@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -29,7 +29,7 @@ from rebade.actions.ActionForget import ActionForget
 from rebade.actions.ActionGeneric import ActionGeneric
 
 def main():
-	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", run_method = True, trailing_text = f"rebade v{rebade.VERSION}")
+	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", trailing_text = f"rebade v{rebade.VERSION}")
 
 	def genparser(parser):
 		parser.add_argument("-o", "--oneshot", action = "store_true", help = "By default, retry until backup is successful. With this option, run restic only once.")
