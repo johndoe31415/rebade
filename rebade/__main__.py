@@ -27,6 +27,7 @@ from rebade.actions.ActionDaemon import ActionDaemon
 from rebade.actions.ActionMount import ActionMount
 from rebade.actions.ActionForget import ActionForget
 from rebade.actions.ActionGeneric import ActionGeneric
+from rebade.actions.ActionCronjob import ActionCronjob
 
 def main():
 	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", trailing_text = f"rebade v{rebade.VERSION}")
@@ -40,7 +41,7 @@ def main():
 	mc.register("backup", "Perform a backup plan", genparser, action = ActionBackup)
 
 	def genparser(parser):
-		parser.add_argument("--systemd-unit-filename", metavar = "filename", default = "/etc/systemd/system/rebade.service", help = "Systemd unit when installing/deinstalling. Defaults to %(default)s.")
+		parser.add_argument("--systemd-unit-filename", metavar = "filename", default = "/etc/systemd/system/rebade-daemon.service", help = "Systemd unit when installing/deinstalling. Defaults to %(default)s.")
 		parser.add_argument("-a", "--action", choices = [ "watch", "install", "uninstall" ], default = "watch", help = "Perform a specific action. Can be one of %(choices)s, defaults to %(default)s.")
 		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
 		parser.add_argument("-s", "--state-file", metavar = "filename", default = "/etc/rebade/state.json", help = "Specifies the file in which the state is kept. Defaults to %(default)s.")
@@ -49,6 +50,15 @@ def main():
 		parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increase verbosity. Can be given multiple times.")
 		parser.add_argument("plan_name", nargs = "*", help = "Backup plan(s) to execute. If not specified, uses the default plan.")
 	mc.register("daemon", "Watch for activity and execute backup when a threshold is reached", genparser, action = ActionDaemon)
+
+	def genparser(parser):
+		parser.add_argument("--systemd-unit-name", metavar = "name", default = "main", help = "Systemd unit when installing/deinstalling. Defaults to %(default)s.")
+		parser.add_argument("-d", "--delete", action = "store_true", help = "Remove the cronjob.")
+		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
+		parser.add_argument("-c", "--config-file", metavar = "filename", default = "/etc/rebade/config.json", help = "Specifies the global configuration file. Defaults to %(default)s.")
+		parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increase verbosity. Can be given multiple times.")
+		parser.add_argument("plan_name", nargs = "*", help = "Backup plan(s) to forget. If not specified, uses the default plan.")
+	mc.register("cronjob", "Schedule a systemd timer cronjob that executes the backup plan(s)", genparser, action = ActionCronjob)
 
 	def genparser(parser):
 		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
