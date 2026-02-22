@@ -103,5 +103,12 @@ def main():
 		parser.add_argument("plan_name", nargs = "*", help = "Backup plan(s) to forget. If not specified, uses the default plan.")
 	mc.register("prune", "Remove unused files from repository", genparser, action = ActionGeneric)
 
+	def genparser(parser):
+		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
+		parser.add_argument("-c", "--config-file", metavar = "filename", default = "/etc/rebade/config.json", help = "Specifies the global configuration file. Defaults to %(default)s.")
+		parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increase verbosity. Can be given multiple times.")
+		parser.add_argument("plan_name", nargs = "*", help = "Backup plan(s) to forget. If not specified, uses the default plan.")
+	mc.register("init", "Initialize a repository", genparser, action = ActionGeneric)
+
 	returncode = mc.run(sys.argv[1:])
 	return (returncode or 0)
