@@ -20,8 +20,6 @@
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
 import re
-import contextlib
-import subprocess
 import collections
 
 class FileSystemTools():

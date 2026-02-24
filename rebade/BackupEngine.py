@@ -23,9 +23,9 @@ import os
 import math
 import contextlib
 import subprocess
-import requests
 import logging
 import dataclasses
+import requests
 from rebade.Configuration import BackupMethod, HookMethod, Condition
 from rebade.Tools import FileSystemTools
 from rebade.CmdlineEscape import CmdlineEscape
