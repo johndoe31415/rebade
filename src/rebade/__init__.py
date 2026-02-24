@@ -19,4 +19,4 @@
 #
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
-VERSION = "0.0.5rc0"
+VERSION = "0.0.5"
