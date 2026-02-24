@@ -1,0 +1,35 @@
+[build-system]
+requires = [ "setuptools>=77.0.3" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rebade"
+license = "GPL-3.0"
+version = "0.0.5rc0"
+description = "Restic backup daemon: a friendly frontend for restic"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [ { name = "Johannes Bauer", email = "joe@johannes-bauer.com" } ]
+keywords = [ "restic", "backup", "daemon" ]
+classifiers = [
+	"Programming Language :: Python :: 3",
+]
+
+dependencies = [
+	"requests",
+]
+
+[project.urls]
+Homepage = "https://github.com/johndoe31415/rebade"
+Repository = "https://github.com/johndoe31415/rebade.git"
+Issues = "https://github.com/johndoe31415/rebade/issues"
+Releases = "https://github.com/johndoe31415/rebade/tags"
+
+[project.scripts]
+rebade = "rebade.__main__:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = [ "src" ]

@@ -1,0 +1,43 @@
+{
+	"plans": {
+		"system-backup": {
+			"default": true,
+			"source": {
+				"paths": [
+					"/home/joe/tmp/back_me_up"
+				],
+				"only_filesystems": [
+					"ext4",
+					"vfat",
+					"tmpfs"
+				],
+				"exclude": [
+					"/proc",
+					"/sys",
+					"/dev",
+					"/var/cache/apt/archives",
+					"/var/lib/lxcfs",
+					"/run/user",
+					"/tmp",
+					"/mnt",
+					"/media",
+					"/run/snapd"
+				]
+			},
+			"target": {
+				"method": "local",
+				"remote_path": "/tmp/restic_repo"
+			},
+			"post_hooks": [
+				{
+					"method": "http_get",
+					"condition": "success",
+					"uri": "https://hc-ping.com/a26d9b8b-6001-413f-bc0a-5955f0b0b21c"
+				}
+			],
+			"keyfile": "/tmp/restic_backup_key.txt",
+			"soft_period_secs": 18000,
+			"hard_period_secs": 25200
+		}
+	}
+}
