@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -30,7 +30,6 @@ from rebade.StateFile import StateFile
 from rebade.MultiCommand import LoggingAction
 from rebade.Configuration import Configuration
 from rebade.BackupEngine import BackupEngine
-from rebade.Tools import inhibit_suspend
 
 _log = logging.getLogger(__spec__.name)
 
@@ -115,18 +114,17 @@ class ActionDaemon(LoggingAction):
 					execute_plans.append(plan)
 
 			if len(execute_plans) > 0:
-				with inhibit_suspend():
-					for plan in execute_plans:
-						_log.info(f"Now executing: {plan.name}")
-						if self._backup_engine.execute_backup(plan):
-							# Backup successful
-							self._state_file.reset_activity(plan.name)
-							_log.info(f"Successfully backed up: {plan.name}")
-						else:
-							# Incur a holdoff, do not reset activity
-							holdoff = time.time() + 1800
-							self._state_file.set_holdoff(plan.name, holdoff)
-							_log.warning(f"Failed to backed up: {plan.name} -- incurring holdoff")
+				for plan in execute_plans:
+					_log.info(f"Now executing: {plan.name}")
+					if self._backup_engine.execute_backup(plan):
+						# Backup successful
+						self._state_file.reset_activity(plan.name)
+						_log.info(f"Successfully backed up: {plan.name}")
+					else:
+						# Incur a holdoff, do not reset activity
+						holdoff = time.time() + 1800
+						self._state_file.set_holdoff(plan.name, holdoff)
+						_log.warning(f"Failed to backed up: {plan.name} -- incurring holdoff")
 
 	def _open_run_close(self):
 		try:

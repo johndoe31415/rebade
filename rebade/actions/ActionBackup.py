@@ -1,5 +1,5 @@
 #	rebade - Restic backup daemon, a friendly frontend for restic
-#	Copyright (C) 2024-2024 Johannes Bauer
+#	Copyright (C) 2024-2026 Johannes Bauer
 #
 #	This file is part of rebade.
 #
@@ -20,28 +20,37 @@
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
 import time
+import sys
 from rebade.MultiCommand import LoggingAction
 from rebade.Configuration import Configuration
 from rebade.BackupEngine import BackupEngine
-from rebade.Tools import inhibit_suspend
+from rebade.Enums import ResticBackupReturncodes
 
 class ActionBackup(LoggingAction):
 	def run(self):
 		self._config = Configuration.parse_json_file(self._args.config_file)
 		backup_engine = BackupEngine(self._args.restic_binary)
 		attempt_count = 0
-		with inhibit_suspend():
-			while True:
-				attempt_count += 1
-				all_successful = True
-				for plan in self._config.get_plans_by_name(self._args.plan_name):
-					if not backup_engine.execute_backup(plan):
-						all_successful = False
 
-				if all_successful or self._args.oneshot:
-					break
+		plans = self._config.get_plans_by_name(self._args.plan_name)
+		while True:
+			repeat_plans = [ ]
+			attempt_count += 1
+			for plan in plans:
+				backup_status = backup_engine.execute_backup(plan)
+				if backup_status not in [ ResticBackupReturncodes.Success, ResticBackupReturncodes.IncompleteSnapshot ]:
+					# We need to repeat this plan
+					print(f"Backup plan {plan.name} failed: {backup_status.name if hasattr(backup_status, 'name') else backup_status}", file = sys.stderr)
+					repeat_plans.append(plan)
 				else:
-					wait_time_secs = 60
-					print(f"Attempt #{attempt_count} was unsuccessful; retrying in {wait_time_secs} seconds...")
-					time.sleep(wait_time_secs)
-		return 0 if all_successful else 1
+					print(f"Backup plan {plan.name} finished: {backup_status.name if hasattr(backup_status, 'name') else backup_status}", file = sys.stderr)
+
+			if (len(repeat_plans) == 0) or ((self._args.max_backup_attempts != 0) and (attempt_count >= self._args.max_backup_attempts)):
+				break
+
+			# We need to redo some plans.
+			wait_time_secs = 60 * min(attempt_count, 30)
+			print(f"Attempt #{attempt_count} was unsuccessful, {len(repeat_plans)} of {len(plans)} failed; retrying in {wait_time_secs} seconds...", file = sys.stderr)
+			plans = repeat_plans
+			time.sleep(wait_time_secs)
+		return 0 if (len(repeat_plans) == 0) else 1

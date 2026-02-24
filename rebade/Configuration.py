@@ -63,6 +63,8 @@ class Hook():
 				}
 		return cls(method = method, condition = condition, args = args)
 
+	def __str__(self):
+		return f"Hook<{self.method}, {self.condition}, {self.args}>"
 
 class BackupSource():
 	def __init__(self, paths: list[str], exclude: list[str], only_filesystems: list[str]):
@@ -92,6 +94,7 @@ class BackupSource():
 class BackupMethod(enum.Enum):
 	SFTP = "sftp"
 	REST = "rest"
+	Local = "local"
 
 class BackupPlan():
 	def __init__(self, name: str, is_default: bool, keyfile: str, soft_period_secs: int, hard_period_secs: int, source: BackupSource, target: dict, pre_hooks: list[Hook], post_hooks: list[Hook]):

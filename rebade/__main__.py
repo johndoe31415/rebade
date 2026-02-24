@@ -33,7 +33,7 @@ def main():
 	mc = MultiCommand(description = "Restic Backup Daemon -- frontend to Restic", trailing_text = f"rebade v{rebade.VERSION}")
 
 	def genparser(parser):
-		parser.add_argument("-o", "--oneshot", action = "store_true", help = "By default, retry until backup is successful. With this option, run restic only once.")
+		parser.add_argument("-m", "--max-backup-attempts", type = int, default = 5, help = "When backup fails with a fatal error (i.e., no snapshot was created), rebade will retry a number of times. By default, this number is %(default)d. When set to zero, this means retry infinitely.")
 		parser.add_argument("--restic-binary", metavar = "filename", default = "restic", help = "Specifies the restic binary. Defaults to %(default)s.")
 		parser.add_argument("-c", "--config-file", metavar = "filename", default = "/etc/rebade/config.json", help = "Specifies the global configuration file. Defaults to %(default)s.")
 		parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increase verbosity. Can be given multiple times.")

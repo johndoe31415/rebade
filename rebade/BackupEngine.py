@@ -25,11 +25,24 @@ import contextlib
 import subprocess
 import requests
 import logging
+import dataclasses
 from rebade.Configuration import BackupMethod, HookMethod, Condition
 from rebade.Tools import FileSystemTools
 from rebade.CmdlineEscape import CmdlineEscape
+from rebade.Enums import ResticBackupReturncodes
 
 _log = logging.getLogger(__spec__.name)
+
+@dataclasses.dataclass
+class ExecutionCommand():
+	cmdline: list[str] = dataclasses.field(default_factory = list)
+	env: dict = dataclasses.field(default_factory = dict)
+
+	def append(self, args: list[str]):
+		self.cmdline += args
+
+	def prepend(self, args: list[str]):
+		self.cmdline = args + self.cmdline
 
 class BackupEngine():
 	def __init__(self, restic_binary: str, nice: int = 19, ionice_class: str = "idle"):
@@ -37,7 +50,7 @@ class BackupEngine():
 		self._nice = nice
 		self._ionice_class = ionice_class
 
-	def _restic_target_command(self, target: dict) -> dict:
+	def _restic_target_command(self, cmd: ExecutionCommand, target: dict):
 		method = BackupMethod(target["method"])
 		match method:
 			case BackupMethod.SFTP:
@@ -49,10 +62,7 @@ class BackupEngine():
 					repo_string.append(f":{target['port']}")
 				repo_string.append("/")
 				repo_string.append(target["remote_path"])
-				return {
-					"cmdline": [ "-r", "".join(repo_string) ],
-					"env": { },
-				}
+				cmd.append([ "-r", "".join(repo_string) ])
 
 			case BackupMethod.REST:
 				repo_string = [ "rest:" ]
@@ -63,39 +73,37 @@ class BackupEngine():
 					repo_string.append(f":{target['port']}")
 				repo_string.append(target["remote_path"])
 
-				env = { }
 				if "username" in target:
-					env["RESTIC_REST_USERNAME"] = target["username"]
+					cmd.env["RESTIC_REST_USERNAME"] = target["username"]
 				if "password" in target:
-					env["RESTIC_REST_PASSWORD"] = target["password"]
+					cmd.env["RESTIC_REST_PASSWORD"] = target["password"]
 
-				cmdline = [ "-r", "".join(repo_string) ]
+				cmd.append([ "-r", "".join(repo_string) ])
 				if "ca_filename" in target:
-					cmdline += [ "--cacert", target["ca_filename"] ]
-				return {
-					"cmdline": cmdline,
-					"env": env,
-				}
-		raise NotImplementedError(method)
+					cmd.append([ "--cacert", target["ca_filename"] ])
 
-	def _restic_remote_command(self, plan: "Plan") -> dict:
-		command = self._restic_target_command(plan.target)
-		command["cmdline"] = [ "-p", plan.keyfile ] + command["cmdline"]
-		return command
+			case BackupMethod.Local:
+				cmd.append([ "-r", target["remote_path"] ])
 
-	def _restic_backup_command(self, plan: "Plan") -> dict:
-		command = self._restic_remote_command(plan)
-		command["cmdline"] = [ "backup" ] + command["cmdline"]
+			case _:
+				raise NotImplementedError(method)
+
+	def _restic_remote_command(self, cmd: ExecutionCommand, plan: "Plan") -> dict:
+		self._restic_target_command(cmd, plan.target)
+		cmd.prepend([ "-p", plan.keyfile ])
+
+	def _restic_backup_command(self, cmd: ExecutionCommand, plan: "Plan") -> dict:
+		self._restic_remote_command(cmd, plan)
+		cmd.prepend([ "backup" ])
 		for exclude in plan.source.exclude:
-			command["cmdline"] += [ "--exclude", exclude ]
+			cmd.append([ "--exclude", exclude ])
 		if len(plan.source.only_filesystems) > 0:
 			# List filesystems and exclude all those that are not in the list
 			for mounted_filesystem in FileSystemTools.get_mounted_filesystems():
 				if mounted_filesystem.fstype not in plan.source.only_filesystems:
-					command["cmdline"] += [ "--exclude", mounted_filesystem.mountpoint ]
+					cmd.append([ "--exclude", mounted_filesystem.mountpoint ])
 		for path in plan.source.paths:
-			command["cmdline"] += [ path ]
-		return command
+			cmd.append([ path ])
 
 	@contextlib.contextmanager
 	def execute_pre_post_hooks(self, plan: "BackupPlan"):
@@ -105,10 +113,7 @@ class BackupEngine():
 		self.execute_hooks(plan.post_hooks, run_args)
 
 	def _condition_satisfied(self, hook: "Hook", run_args: dict):
-		if "condition" not in hook.args:
-			return True
-		condition = hook.args["condition"]
-		match condition:
+		match hook.condition:
 			case Condition.Success:
 				return run_args.get("backup_success", True)
 
@@ -119,7 +124,9 @@ class BackupEngine():
 
 	def execute_hook(self, hook: "Hook", run_args: dict):
 		if not self._condition_satisfied(hook, run_args):
+			_log.warning("Skipping hook %s -> condition not satisfied", str(hook))
 			return
+		_log.debug("Executing hook %s", str(hook))
 
 		match hook.method:
 			case HookMethod.HttpGet:
@@ -129,31 +136,40 @@ class BackupEngine():
 		for hook in hooks:
 			self.execute_hook(hook, run_args)
 
-	def _run_cmd(self, command: dict):
-		_log.debug("Execution of command: %s with %d environment vars", CmdlineEscape().cmdline(command["cmdline"]), len(command["env"]))
+	def _run_cmd(self, command: ExecutionCommand) -> int:
 		env = dict(os.environ)
-		env.update(command["env"])
-		success = subprocess.run(command["cmdline"], env = env, check = False).returncode == 0
-		return success
+		env.update(command.env)
+		cmdline = [ "systemd-inhibit", "--who=Rebade backup daemon", "--why=Backup action running", "--mode=delay", "--what=shutdown:sleep" ] + list(command.cmdline)
+		_log.debug("Execution of command: %s with %d environment vars", CmdlineEscape().cmdline(cmdline), len(command.env))
+		returncode = subprocess.run(cmdline, env = env, check = False).returncode
+		return returncode
 
 	def execute_backup(self, plan: "BackupPlan"):
 		with self.execute_pre_post_hooks(plan) as run_args:
-			command = self._restic_backup_command(plan)
-			cmdline_prefix = [ "nice", "-n", str(self._nice) ]
-			cmdline_prefix += [ "ionice", "-c", self._ionice_class ]
-			cmdline_prefix += [ self._restic_binary ]
-			command["cmdline"] = cmdline_prefix + command["cmdline"]
-			success = self._run_cmd(command)
-			run_args["backup_success"] = success
-			return success
+			command = ExecutionCommand()
+			self._restic_backup_command(command, plan)
+			command.prepend([ self._restic_binary ])
+			command.prepend([ "nice", "-n", str(self._nice) ])
+			command.prepend([ "ionice", "-c", self._ionice_class ])
+			returncode = self._run_cmd(command)
+			try:
+				backup_status = ResticBackupReturncodes(returncode)
+			except ValueError:
+				pass
+
+			# Run the post-hook only if the backup was a complete success (so
+			# we get notified if there are only partial snapshots created)
+			run_args["backup_success"] = (backup_status == ResticBackupReturncodes.Success)
+			return backup_status
 
 	def execute_mount(self, plan: "BackupPlan", mountpoint: str):
 		with contextlib.suppress(FileExistsError):
 			os.makedirs(mountpoint)
-		command = self._restic_remote_command(plan)
-		command["cmdline"] = [ self._restic_binary, "mount" ] + command["cmdline"] + [ mountpoint ]
-		success = self._run_cmd(command)
-		return success
+		command = ExecutionCommand()
+		self._restic_remote_command(command, plan)
+		command.prepend([ self._restic_binary, "mount" ])
+		command.append([ mountpoint ])
+		return self._run_cmd(command)
 
 	def execute_forget(self, plan: "BackupPlan", scale = 1.0):
 		time_params = {
@@ -164,17 +180,19 @@ class BackupEngine():
 		}
 		time_params = { key: str(math.ceil(value * scale)) for (key, value) in time_params.items() }
 
-		command = self._restic_remote_command(plan)
-		command["cmdline"] = [ self._restic_binary, "forget" ] + command["cmdline"]
-		command["cmdline"] += [ "--keep-yearly", "unlimited" ]
+		command = ExecutionCommand()
+		self._restic_remote_command(command, plan)
+		command.prepend([ self._restic_binary, "forget" ])
+		command.append([ "--keep-yearly", "unlimited" ])
+
 		for (key, value) in time_params.items():
-			command["cmdline"] += [ key, value ]
-		command["cmdline"] += [ "--prune" ]
-		success = self._run_cmd(command)
-		return success
+			command.append([ key, value ])
+		command.append([ "--prune" ])
+		return self._run_cmd(command)
 
 	def execute_generic_action(self, plan: "BackupPlan", action: str):
-		command = self._restic_remote_command(plan)
-		command["cmdline"] = [ self._restic_binary, action ] + command["cmdline"]
+		command = ExecutionCommand()
+		self._restic_remote_command(command, plan)
+		command.prepend([ self._restic_binary, action ])
 		success = self._run_cmd(command)
 		return success

@@ -19,20 +19,12 @@
 #
 #	Johannes Bauer <JohannesBauer@gmx.de>
 
-import re
-import contextlib
-import subprocess
-import collections
+import enum
 
-class FileSystemTools():
-	FS_ENTRY_RE = re.compile(r"^(?P<src>[^ ]+) (?P<mntpnt>[^ ]+) (?P<fstype>[^ ]+) ", flags = re.MULTILINE)
-	OCT_ESCAPE_RE = re.compile(r"\\(?P<value>[0-7]{3})")
-	MountedFileSystem = collections.namedtuple("MountedFileSystem", [ "fstype", "mountpoint" ])
-
-	@classmethod
-	def get_mounted_filesystems(cls):
-		with open("/proc/mounts") as f:
-			for rematch in cls.FS_ENTRY_RE.finditer(f.read()):
-				rematch = rematch.groupdict()
-				mntpnt = cls.OCT_ESCAPE_RE.sub(lambda innermatch: chr(int(innermatch.groupdict()["value"], 8)), rematch["mntpnt"])
-				yield cls.MountedFileSystem(fstype = rematch["fstype"], mountpoint = mntpnt)
+class ResticBackupReturncodes(enum.IntEnum):
+	Success = 0
+	FatalErrorNoSnapshot = 1
+	IncompleteSnapshot = 3
+	NoSuchRepository = 10
+	RepositoryLocked = 11
+	PasswordIncorrect = 12
